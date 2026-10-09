@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _model = None
 
 def _get_model():
-    """Lazy-init the Gemini model. Returns None if key is missing."""
+#ленивую инициализацию модели Gemini. 
     global _model
     if _model is not None:
         return _model
@@ -23,8 +23,8 @@ def _get_model():
         import google.generativeai as genai
 
         genai.configure(api_key=settings.gemini_api_key)
-        _model = genai.GenerativeModel("gemini-2.0-flash")
-        logger.info("Gemini model initialised (gemini-2.0-flash)")
+        _model = genai.GenerativeModel("gemini-3.8-flash")
+        logger.info("Gemini model initialised (gemini-3.8-flash)")
         return _model
     except Exception:
         logger.exception("Failed to initialise Gemini model")
@@ -35,12 +35,9 @@ async def generate_channel_digest(
     posts: list[dict],
     period_label: str = "last 7 days",
 ) -> str | None:
-    """
-    Generate a short digest/summary of what a channel posted.
-
-    `posts` — list of dicts with keys: text, date, views.
-    Returns markdown string or None if unavailable.
-    """
+#Сводка публикаций канала.
+# `posts`  список словарей с ключами: text, date, views.
+#Возвращает строку в формате Markdown или None, если данные недоступны.
     model = _get_model()
     if model is None:
         return None
@@ -74,7 +71,7 @@ If posts are in multiple languages, use English.
     return await _safe_generate(prompt)
 
 async def categorise_post(text: str) -> str | None:
-    """Assign a short category/topic label to a single post."""
+#Присвойение  отдельной публикации краткую метку категории или темы.
     model = _get_model()
     if model is None:
         return None
@@ -96,12 +93,9 @@ async def detect_anomalies(
     channel_name: str,
     posts_with_stats: list[dict],
 ) -> list[dict]:
-    """
-    Flag posts whose engagement is significantly above the channel average.
-
-    Returns list of dicts: {message_id, reason}.
-    Simple heuristic (no LLM needed): views > 2× avg.
-    """
+#публикации, показатели вовлеченности которых значительно превышают средние значения по каналу.
+#Возвращает список словарей: {message_id, reason}.
+#Простая эвристика (LLM не требуется): количество просмотров > 2 × среднее значение.
     if len(posts_with_stats) < 3:
         return []
 
@@ -127,7 +121,7 @@ async def detect_anomalies(
     return anomalies
 
 async def _safe_generate(prompt: str) -> str | None:
-    """Call Gemini with full error handling. Returns None on any failure."""
+#Вызывает Gemini с полной обработкой ошибок. 
     model = _get_model()
     if model is None:
         return None
@@ -142,5 +136,5 @@ async def _safe_generate(prompt: str) -> str | None:
         return None
 
 def is_ai_available() -> bool:
-    """Quick check for the dashboard to know if AI features are active."""
+#Быстрая проверка панели управления, чтобы узнать, активны ли функции ИИ.
     return _get_model() is not None

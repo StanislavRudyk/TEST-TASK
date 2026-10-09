@@ -58,7 +58,6 @@ app.mount("/static", StaticFiles(directory=_BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_BASE_DIR / "templates")
 
 def _format_number(value):
-    """Format large numbers: 1234567 → '1.2M'."""
     if value is None:
         return "—"
     if isinstance(value, str):
@@ -70,7 +69,6 @@ def _format_number(value):
     return str(value)
 
 def _time_ago(value):
-    """Format datetime as 'X ago'."""
     if value is None:
         return "never"
     if isinstance(value, str):
@@ -94,7 +92,7 @@ templates.env.filters["time_ago"] = _time_ago
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, session: AsyncSession = Depends(get_session)):
-    """Main dashboard — list of all tracked channels."""
+#Главный дашборд - список всех отслеживаемых каналов
     result = await session.execute(
         select(Channel).order_by(Channel.added_at.desc())
     )
@@ -125,7 +123,7 @@ async def channel_page(
     period: str = Query("7d", regex="^(1d|7d|30d|all)$"),
     session: AsyncSession = Depends(get_session),
 ):
-    """Channel detail page — metrics, posts, AI digest."""
+#Страница канала — метрики, посты, AI-дайджест.
     channel = await session.get(Channel, username.lower())
     if channel is None:
         raise HTTPException(status_code=404, detail="Channel not found")
@@ -212,7 +210,7 @@ async def post_page(
     message_id: int,
     session: AsyncSession = Depends(get_session),
 ):
-    """Post detail page — full text, metrics, history."""
+ #Страница поста — полный текст, метрики, история.
     result = await session.execute(
         select(Post).where(
             Post.channel_username == username.lower(),
@@ -250,7 +248,7 @@ async def api_add_channel(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Add a channel by username. Called from the dashboard form."""
+ #Добавление канала по имени пользователя. Вызывается из формы на дашборде.
     body = await request.json()
     username = body.get("username", "").strip().lstrip("@").lower()
 
@@ -332,12 +330,9 @@ async def health():
 
 @app.get("/api/collect")
 async def api_trigger_collect(session: AsyncSession = Depends(get_session)):
-    """
-    Trigger manual collection of all channels.
-
-    Also used as the endpoint for external cron triggers
-    (cron-job.org / GitHub Actions) to wake the service on free-tier
-    hosting that sleeps during inactivity.
-    """
+   #Запуск ручного сбора данных по всем каналам.
+   # также используется как эндпоинт для внешних cron-триггеров
+   #(cron-job.org / GitHub Actions) для пробуждения сервиса на
+   #free-tier хостинге, который засыпает при отсутствии активности.
     summary = await collect_all_channels(session)
     return JSONResponse({"ok": True, "summary": summary})

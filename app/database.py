@@ -4,12 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=(settings.app_env == "development"),
-    pool_size=5,
-    max_overflow=5,
-)
+engine_kwargs = {"echo": (settings.app_env == "development")}
+if not settings.database_url.startswith("sqlite"):
+    engine_kwargs.update({"pool_size": 5, "max_overflow": 5})
+
+engine = create_async_engine(settings.database_url, **engine_kwargs)
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
