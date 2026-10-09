@@ -1,19 +1,9 @@
-"""
-Tests for analytics metrics computation.
 
-Covers:
-  - Anomaly detection (statistical heuristic)
-  - Views aggregation per day
-  - Number formatting (K, M suffixes)
-"""
 
 import pytest
 
 from app.ai_service import detect_anomalies
 from app.main import _format_number
-
-
-# ── Anomaly Detection ─────────────────────────────────────────────
 
 class TestAnomalyDetection:
     @pytest.mark.asyncio
@@ -23,7 +13,7 @@ class TestAnomalyDetection:
             {"message_id": 2, "views": 120},
             {"message_id": 3, "views": 80},
             {"message_id": 4, "views": 110},
-            {"message_id": 5, "views": 500},  # ← anomaly (5× avg)
+            {"message_id": 5, "views": 500},  
         ]
         result = await detect_anomalies("test", posts)
         anomaly_ids = [a["message_id"] for a in result]
@@ -60,9 +50,6 @@ class TestAnomalyDetection:
         assert len(result) >= 1
         assert "reason" in result[0]
         assert "above" in result[0]["reason"].lower()
-
-
-# ── Number Formatting ─────────────────────────────────────────────
 
 class TestFormatNumber:
     @pytest.mark.parametrize("value,expected", [

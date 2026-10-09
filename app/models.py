@@ -1,18 +1,4 @@
-"""
-SQLAlchemy ORM models.
 
-Design decisions (see also docs/adr/002-metrics-storage.md):
-
-* Natural keys: channel.username, post.(channel_username + message_id).
-  No surrogate integer PK — this gives idempotent upserts for free.
-
-* Metrics history: separate tables `channel_metrics_history` and
-  `post_metrics_history` capture snapshots of views / subscribers
-  over time.  The "current" value is always the latest row.
-
-* Reactions are stored as JSONB — Telegram reactions are dynamic
-  (emoji set changes), so a fixed-column schema would break.
-"""
 
 from __future__ import annotations
 
@@ -31,12 +17,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-
 class Base(DeclarativeBase):
     pass
-
-
-# ── Channel ───────────────────────────────────────────────────────────
 
 class Channel(Base):
     """A tracked Telegram channel.  PK = username (natural key)."""
@@ -49,7 +31,6 @@ class Channel(Base):
     avatar_url: Mapped[str | None] = mapped_column(String(1024))
     subscriber_count: Mapped[int | None] = mapped_column(BigInteger)
 
-    # Status: pending | collecting | active | error
     status: Mapped[str] = mapped_column(String(32), default="pending")
     error_message: Mapped[str | None] = mapped_column(Text)
 
@@ -60,7 +41,6 @@ class Channel(Base):
         DateTime(timezone=True)
     )
 
-    # Relationships
     posts: Mapped[list[Post]] = relationship(back_populates="channel", cascade="all, delete-orphan")
     metrics_history: Mapped[list[ChannelMetricsSnapshot]] = relationship(
         back_populates="channel", cascade="all, delete-orphan"
@@ -68,9 +48,6 @@ class Channel(Base):
     ai_analyses: Mapped[list[AIAnalysis]] = relationship(
         back_populates="channel", cascade="all, delete-orphan"
     )
-
-
-# ── Post ──────────────────────────────────────────────────────────────
 
 class Post(Base):
     """
@@ -95,7 +72,6 @@ class Post(Base):
     media_type: Mapped[str | None] = mapped_column(String(64))
     url: Mapped[str | None] = mapped_column(String(512))
 
-    # AI-generated fields (populated lazily)
     ai_category: Mapped[str | None] = mapped_column(String(128))
     ai_summary: Mapped[str | None] = mapped_column(Text)
     is_anomaly: Mapped[bool | None] = mapped_column(default=False)
@@ -104,20 +80,15 @@ class Post(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # Natural key constraint — guarantees idempotent upserts
     __table_args__ = (
         UniqueConstraint("channel_username", "message_id", name="uq_post_natural_key"),
         Index("ix_posts_channel_date", "channel_username", "date"),
     )
 
-    # Relationships
     channel: Mapped[Channel] = relationship(back_populates="posts")
     metrics_history: Mapped[list[PostMetricsSnapshot]] = relationship(
         back_populates="post", cascade="all, delete-orphan"
     )
-
-
-# ── Metrics History ───────────────────────────────────────────────────
 
 class ChannelMetricsSnapshot(Base):
     """Point-in-time snapshot of channel-level metrics (subscribers)."""
@@ -139,7 +110,6 @@ class ChannelMetricsSnapshot(Base):
 
     channel: Mapped[Channel] = relationship(back_populates="metrics_history")
 
-
 class PostMetricsSnapshot(Base):
     """Point-in-time snapshot of post-level metrics (views, reactions)."""
 
@@ -160,9 +130,6 @@ class PostMetricsSnapshot(Base):
     )
 
     post: Mapped[Post] = relationship(back_populates="metrics_history")
-
-
-# ── AI Analysis ───────────────────────────────────────────────────────
 
 class AIAnalysis(Base):
     """

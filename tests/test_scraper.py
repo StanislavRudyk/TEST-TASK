@@ -1,14 +1,4 @@
-"""
-Tests for the Telegram HTML parser.
 
-All tests run on local HTML fixtures — NO network access.
-Covers:
-  - Channel metadata extraction
-  - Post parsing (text, views, reactions, media type, date)
-  - Subscriber count normalisation (K, M, B suffixes)
-  - Edge cases: private channel, non-existent channel
-  - Username normalisation
-"""
 
 import datetime as dt
 
@@ -21,9 +11,6 @@ from app.scraper import (
     _normalise_username,
     _parse_count_text,
 )
-
-
-# ── Channel metadata ─────────────────────────────────────────────
 
 class TestParseChannel:
     def test_extracts_title(self, sample_channel_html):
@@ -41,9 +28,6 @@ class TestParseChannel:
     def test_username_preserved(self, sample_channel_html):
         result = parse_channel_page("durov", sample_channel_html)
         assert result.username == "durov"
-
-
-# ── Posts ─────────────────────────────────────────────────────────
 
 class TestParsePosts:
     def test_extracts_correct_number_of_posts(self, sample_channel_html):
@@ -103,9 +87,6 @@ class TestParsePosts:
         post = next(p for p in result.posts if p.message_id == 123)
         assert post.url == "https://t.me/durov/123"
 
-
-# ── Number parsing ────────────────────────────────────────────────
-
 class TestParseCountText:
     @pytest.mark.parametrize("text,expected", [
         ("1.2K", 1200),
@@ -121,9 +102,6 @@ class TestParseCountText:
     def test_parse_count_text(self, text, expected):
         assert _parse_count_text(text) == expected
 
-
-# ── Username normalisation ────────────────────────────────────────
-
 class TestNormaliseUsername:
     @pytest.mark.parametrize("raw,expected", [
         ("durov", "durov"),
@@ -137,9 +115,6 @@ class TestNormaliseUsername:
     ])
     def test_normalise(self, raw, expected):
         assert _normalise_username(raw) == expected
-
-
-# ── Error cases ───────────────────────────────────────────────────
 
 class TestErrorCases:
     def test_private_channel_raises(self, private_channel_html):

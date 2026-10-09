@@ -1,19 +1,10 @@
-"""
-Tests for idempotent post upsert logic.
 
-Verifies that re-inserting the same post (same channel + message_id)
-updates views/reactions without creating duplicates.
-
-These tests use an in-memory approach — we test the data structures and
-logic, not the actual DB (which would require a running Postgres).
-"""
 
 import datetime as dt
 
 import pytest
 
 from app.scraper import ScrapedPost, ScrapedChannel, parse_channel_page
-
 
 class TestIdempotency:
     """

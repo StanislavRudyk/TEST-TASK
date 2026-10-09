@@ -1,12 +1,4 @@
-"""
-Collector — orchestrates scraping → DB storage.
 
-Responsible for:
-  - Adding new channels (initial scrape)
-  - Incremental collection of existing channels
-  - Upserting posts idempotently via natural key
-  - Recording metrics snapshots (views/subscribers over time)
-"""
 
 from __future__ import annotations
 
@@ -35,7 +27,6 @@ from app import ai_service
 
 logger = logging.getLogger(__name__)
 
-
 async def add_channel(session: AsyncSession, username: str) -> Channel:
     """
     Add a new channel: create DB row, trigger first scrape.
@@ -44,22 +35,18 @@ async def add_channel(session: AsyncSession, username: str) -> Channel:
     """
     username = username.strip().lstrip("@").lower()
 
-    # Check if already tracked
     existing = await session.get(Channel, username)
     if existing is not None:
         return existing
 
-    # Create row immediately with 'pending' status so the UI can show it
     channel = Channel(username=username, status="pending")
     session.add(channel)
     await session.commit()
     await session.refresh(channel)
 
-    # Run first collection
     await collect_channel(session, username)
 
     return channel
-
 
 async def collect_channel(session: AsyncSession, username: str) -> bool:
     """
@@ -67,7 +54,7 @@ async def collect_channel(session: AsyncSession, username: str) -> bool:
 
     Designed to be called both on-demand (add) and periodically (scheduler).
     """
-    # Mark as collecting
+
     await session.execute(
         update(Channel)
         .where(Channel.username == username)
@@ -88,7 +75,6 @@ async def collect_channel(session: AsyncSession, username: str) -> bool:
         await _mark_error(session, username, f"Scraping error: {exc}")
         return False
 
-    # ── Update channel metadata ───────────────────────────────
     await session.execute(
         update(Channel)
         .where(Channel.username == username)
@@ -103,20 +89,17 @@ async def collect_channel(session: AsyncSession, username: str) -> bool:
         )
     )
 
-    # ── Record channel metrics snapshot ───────────────────────
     if scraped.subscriber_count is not None:
         session.add(ChannelMetricsSnapshot(
             channel_username=username,
             subscriber_count=scraped.subscriber_count,
         ))
 
-    # ── Upsert posts (idempotent via natural key) ─────────────
     for sp in scraped.posts:
         await _upsert_post(session, username, sp)
 
     await session.commit()
 
-    # ── AI: categorise new posts (best-effort) ────────────────
     try:
         await _ai_process_posts(session, username)
     except Exception:
@@ -129,7 +112,6 @@ async def collect_channel(session: AsyncSession, username: str) -> bool:
         scraped.subscriber_count,
     )
     return True
-
 
 async def collect_all_channels(session: AsyncSession) -> dict:
     """Collect data for all tracked channels.  Returns summary."""
@@ -148,9 +130,6 @@ async def collect_all_channels(session: AsyncSession) -> dict:
 
     logger.info("Collection round complete: %s", summary)
     return summary
-
-
-# ── Internal helpers ──────────────────────────────────────────────────
 
 async def _upsert_post(
     session: AsyncSession,
@@ -184,8 +163,6 @@ async def _upsert_post(
 
     result = await session.execute(stmt)
 
-    # Record metrics snapshot for the post
-    # We need the post id — fetch it
     post_row = await session.execute(
         select(Post.id).where(
             Post.channel_username == channel_username,
@@ -200,7 +177,6 @@ async def _upsert_post(
             reactions=sp.reactions,
         ))
 
-
 async def _mark_error(session: AsyncSession, username: str, message: str) -> None:
     """Mark channel status as error with a human-readable message."""
     await session.execute(
@@ -210,7 +186,6 @@ async def _mark_error(session: AsyncSession, username: str, message: str) -> Non
     )
     await session.commit()
     logger.warning("Channel @%s error: %s", username, message)
-
 
 async def _ai_process_posts(session: AsyncSession, channel_username: str) -> None:
     """Categorise posts that don't have an AI category yet (best-effort)."""
@@ -225,7 +200,7 @@ async def _ai_process_posts(session: AsyncSession, channel_username: str) -> Non
             Post.text.isnot(None),
         )
         .order_by(Post.date.desc())
-        .limit(10)  # process at most 10 per run to respect rate limits
+        .limit(10)  
     )
     posts = result.scalars().all()
 

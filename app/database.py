@@ -1,9 +1,4 @@
-"""
-SQLAlchemy async engine + session factory.
 
-Uses a single shared engine; sessions are created per-request via
-dependency injection in FastAPI routes.
-"""
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -18,8 +13,7 @@ engine = create_async_engine(
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-
-async def get_session() -> AsyncSession:  # type: ignore[misc]
+async def get_session() -> AsyncSession:  
     """FastAPI dependency — yields one session per request."""
     async with async_session() as session:
         yield session

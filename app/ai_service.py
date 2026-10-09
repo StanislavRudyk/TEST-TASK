@@ -1,16 +1,4 @@
-"""
-AI / LLM integration layer.
 
-Uses Google Gemini (free tier via AI Studio).
-All calls are wrapped with error handling — if the LLM is down or
-rate-limited, the dashboard continues to work; AI sections simply
-show "Analysis unavailable".
-
-Three capabilities:
-  1. Channel digest — "what the channel posted this week"
-  2. Post categorisation — topic/category tag for a post
-  3. Anomaly detection — flag posts with unusually high engagement
-"""
 
 from __future__ import annotations
 
@@ -21,10 +9,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Lazy initialisation (avoids import error when key is absent) ──────
-
 _model = None
-
 
 def _get_model():
     """Lazy-init the Gemini model. Returns None if key is missing."""
@@ -45,9 +30,6 @@ def _get_model():
         logger.exception("Failed to initialise Gemini model")
         return None
 
-
-# ── Public API ────────────────────────────────────────────────────────
-
 async def generate_channel_digest(
     channel_name: str,
     posts: list[dict],
@@ -66,12 +48,11 @@ async def generate_channel_digest(
     if not posts:
         return "No posts in the selected period."
 
-    # Build a compact context (limit total tokens)
     post_lines = []
-    for i, p in enumerate(posts[:30]):  # cap at 30 posts to stay under limits
+    for i, p in enumerate(posts[:30]):  
         date_str = p.get("date", "")
         views = p.get("views", 0)
-        text = (p.get("text") or "")[:300]  # truncate long texts
+        text = (p.get("text") or "")[:300]  
         post_lines.append(f"{i+1}. [{date_str}] (views: {views}) {text}")
 
     posts_block = "\n".join(post_lines)
@@ -92,7 +73,6 @@ If posts are in multiple languages, use English.
 
     return await _safe_generate(prompt)
 
-
 async def categorise_post(text: str) -> str | None:
     """Assign a short category/topic label to a single post."""
     model = _get_model()
@@ -111,7 +91,6 @@ Post text:
 Reply with ONLY the label, nothing else."""
 
     return await _safe_generate(prompt)
-
 
 async def detect_anomalies(
     channel_name: str,
@@ -147,9 +126,6 @@ async def detect_anomalies(
 
     return anomalies
 
-
-# ── Internal helpers ──────────────────────────────────────────────────
-
 async def _safe_generate(prompt: str) -> str | None:
     """Call Gemini with full error handling. Returns None on any failure."""
     model = _get_model()
@@ -161,10 +137,9 @@ async def _safe_generate(prompt: str) -> str | None:
             return response.text.strip()
         return None
     except Exception as exc:
-        # Log but never crash — dashboard must keep working
+
         logger.warning("LLM call failed: %s", exc)
         return None
-
 
 def is_ai_available() -> bool:
     """Quick check for the dashboard to know if AI features are active."""

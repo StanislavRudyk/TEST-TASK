@@ -1,9 +1,4 @@
-"""
-Tests for the AI service layer.
 
-All LLM calls are mocked — no network, no real API keys.
-Verifies graceful degradation when AI is unavailable.
-"""
 
 from unittest.mock import patch, AsyncMock, MagicMock
 
@@ -11,14 +6,13 @@ import pytest
 
 from app import ai_service
 
-
 class TestAIGracefulDegradation:
     """AI layer must never crash the app, even when LLM is down."""
 
     def test_is_ai_available_without_key(self):
         with patch.object(ai_service, "_model", None):
             with patch.object(ai_service.settings, "gemini_api_key", ""):
-                # Reset the cached model
+
                 ai_service._model = None
                 result = ai_service.is_ai_available()
                 assert result is False
@@ -46,7 +40,6 @@ class TestAIGracefulDegradation:
         result = await ai_service._safe_generate("test prompt")
         assert result is None
 
-        # Cleanup
         ai_service._model = None
 
     @pytest.mark.asyncio
@@ -67,7 +60,6 @@ class TestAIGracefulDegradation:
         assert result is not None
         assert "Topic" in result
 
-        # Cleanup
         ai_service._model = None
 
     @pytest.mark.asyncio
@@ -85,5 +77,4 @@ class TestAIGracefulDegradation:
         )
         assert result == "Tech News"
 
-        # Cleanup
         ai_service._model = None

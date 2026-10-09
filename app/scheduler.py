@@ -1,11 +1,4 @@
-"""
-Background scheduler for periodic data collection.
 
-Uses APScheduler with an async-compatible in-process scheduler.
-On Render free tier the service may sleep — the external cron trigger
-(cron-job.org / GitHub Actions) wakes the service via HTTP, and the
-scheduler runs collection on startup + at configured intervals.
-"""
 
 from __future__ import annotations
 
@@ -21,16 +14,14 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-
 async def _scheduled_collect() -> None:
     """Job function: collect all tracked channels."""
-    from app.collector import collect_all_channels  # avoid circular import
+    from app.collector import collect_all_channels  
 
     logger.info("Scheduled collection started")
     async with async_session() as session:
         summary = await collect_all_channels(session)
     logger.info("Scheduled collection finished: %s", summary)
-
 
 def start_scheduler() -> None:
     """Start the background scheduler (called once at app startup)."""
@@ -44,7 +35,6 @@ def start_scheduler() -> None:
     )
     scheduler.start()
     logger.info("Scheduler started — collecting every %d minutes", interval)
-
 
 def stop_scheduler() -> None:
     """Graceful shutdown."""

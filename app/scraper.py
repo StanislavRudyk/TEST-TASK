@@ -1,17 +1,4 @@
-"""
-Telegram channel scraper.
 
-Scrapes the public web-preview at https://t.me/s/<channel>.
-No Bot API token or Telethon/Pyrogram needed — this page is
-publicly available for any channel that has a public username.
-
-The parser extracts:
-  - channel title, description, subscriber count, avatar
-  - posts: message_id, text, date, views, reactions, media type
-
-Idempotency is handled at the DB layer (natural key upsert),
-so re-scraping the same page never creates duplicates.
-"""
 
 from __future__ import annotations
 
@@ -33,19 +20,15 @@ _USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
 )
 
-
-# ── Data classes (scraper output, DB-agnostic) ────────────────────────
-
 @dataclass
 class ScrapedPost:
     message_id: int
     text: str
     date: dt.datetime | None
     views: int
-    reactions: dict[str, int]  # e.g. {"👍": 42, "❤️": 7}
-    media_type: str | None  # "photo" | "video" | "document" | None
+    reactions: dict[str, int]  
+    media_type: str | None  
     url: str
-
 
 @dataclass
 class ScrapedChannel:
@@ -55,9 +38,6 @@ class ScrapedChannel:
     avatar_url: str | None
     subscriber_count: int | None
     posts: list[ScrapedPost] = field(default_factory=list)
-
-
-# ── Public API ────────────────────────────────────────────────────────
 
 async def scrape_channel(username: str) -> ScrapedChannel:
     """
@@ -85,7 +65,6 @@ async def scrape_channel(username: str) -> ScrapedChannel:
     resp.raise_for_status()
     return parse_channel_page(username, resp.text)
 
-
 def parse_channel_page(username: str, html: str) -> ScrapedChannel:
     """
     Pure function: HTML → ScrapedChannel.
@@ -94,20 +73,17 @@ def parse_channel_page(username: str, html: str) -> ScrapedChannel:
     """
     soup = BeautifulSoup(html, "lxml")
 
-    # ── detect private / non-existent ─────────────────────────
     error_el = soup.select_one(".tgme_page_description")
     if error_el and "private" in (error_el.get_text() or "").lower():
         raise ChannelPrivateError(username)
 
-    # If there is no channel header, page is probably a 404 placeholder
     header = soup.select_one(".tgme_channel_info")
     if header is None:
-        # Check alternative page structure (error page)
+
         page_extra = soup.select_one(".tgme_page_extra")
         if page_extra is None:
             raise ChannelNotFoundError(username)
 
-    # ── channel meta ──────────────────────────────────────────
     title = _text(soup.select_one(".tgme_channel_info_header_title"))
     if not title:
         title = _text(soup.select_one(".tgme_page_title span"))
@@ -124,7 +100,6 @@ def parse_channel_page(username: str, html: str) -> ScrapedChannel:
 
     subscriber_count = _parse_subscriber_count(soup)
 
-    # ── posts ─────────────────────────────────────────────────
     posts: list[ScrapedPost] = []
     for widget in soup.select(".tgme_widget_message_wrap"):
         post = _parse_post(widget, username)
@@ -140,19 +115,15 @@ def parse_channel_page(username: str, html: str) -> ScrapedChannel:
         posts=posts,
     )
 
-
-# ── Internals ─────────────────────────────────────────────────────────
-
 def _normalise_username(raw: str) -> str:
     """Strip @, whitespace, leading https://t.me/ etc."""
     raw = raw.strip().lstrip("@")
-    # Handle full URLs
+
     for prefix in ("https://t.me/s/", "https://t.me/", "http://t.me/s/", "http://t.me/", "t.me/s/", "t.me/"):
         if raw.lower().startswith(prefix):
             raw = raw[len(prefix):]
             break
     return raw.split("/")[0].split("?")[0].strip()
-
 
 def _text(el: Tag | None) -> str:
     """Safe text extraction."""
@@ -160,27 +131,25 @@ def _text(el: Tag | None) -> str:
         return ""
     return el.get_text(separator=" ", strip=True)
 
-
 def _parse_subscriber_count(soup: BeautifulSoup) -> int | None:
     """
     Extract subscriber count from e.g. '1.2M subscribers' or '12 345 subscribers'.
     """
     el = soup.select_one(".tgme_channel_info_counter .counter_value")
     if el is None:
-        # Alternative location
+
         extra = soup.select_one(".tgme_page_extra")
         if extra:
             return _parse_count_text(extra.get_text())
         return None
     return _parse_count_text(el.get_text())
 
-
 def _parse_count_text(text: str) -> int | None:
     """Parse '1.2M' / '12 345' / '500K' → int."""
     if not text:
         return None
     text = text.strip().lower().replace("\xa0", "").replace(" ", "")
-    # Remove 'members', 'subscribers' etc.
+
     text = re.sub(r"[a-zа-яіїєґ]+", lambda m: m.group() if m.group() in ("k", "m", "b") else "", text)
     text = text.strip()
     if not text:
@@ -200,14 +169,12 @@ def _parse_count_text(text: str) -> int | None:
     except ValueError:
         return None
 
-
 def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
     """Parse a single .tgme_widget_message_wrap → ScrapedPost or None."""
     msg = wrap.select_one(".tgme_widget_message")
     if msg is None:
         return None
 
-    # ── message_id ────────────────────────────────────────────
     data_post = msg.get("data-post", "")
     if "/" in str(data_post):
         try:
@@ -217,11 +184,9 @@ def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
     else:
         return None
 
-    # ── text ──────────────────────────────────────────────────
     text_el = msg.select_one(".tgme_widget_message_text")
     text = _text(text_el) if text_el else ""
 
-    # ── date ──────────────────────────────────────────────────
     date = None
     time_el = msg.select_one("time")
     if time_el:
@@ -232,13 +197,11 @@ def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
             except ValueError:
                 pass
 
-    # ── views ─────────────────────────────────────────────────
     views = 0
     views_el = msg.select_one(".tgme_widget_message_views")
     if views_el:
         views = _parse_count_text(views_el.get_text()) or 0
 
-    # ── reactions ─────────────────────────────────────────────
     reactions: dict[str, int] = {}
     for reaction_el in msg.select(".tgme_widget_message_reaction"):
         emoji_el = reaction_el.select_one(".tgme_widget_message_reaction_emoji, .emoji")
@@ -249,7 +212,6 @@ def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
             if emoji:
                 reactions[emoji] = count
 
-    # ── media type ────────────────────────────────────────────
     media_type = None
     if msg.select_one(".tgme_widget_message_photo"):
         media_type = "photo"
@@ -258,7 +220,6 @@ def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
     elif msg.select_one(".tgme_widget_message_document"):
         media_type = "document"
 
-    # ── URL ───────────────────────────────────────────────────
     url = f"https://t.me/{channel_username}/{message_id}"
 
     return ScrapedPost(
@@ -271,14 +232,10 @@ def _parse_post(wrap: Tag, channel_username: str) -> ScrapedPost | None:
         url=url,
     )
 
-
-# ── Exceptions ────────────────────────────────────────────────────────
-
 class ChannelNotFoundError(Exception):
     def __init__(self, username: str) -> None:
         self.username = username
         super().__init__(f"Channel @{username} not found")
-
 
 class ChannelPrivateError(Exception):
     def __init__(self, username: str) -> None:

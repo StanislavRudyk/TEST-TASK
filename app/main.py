@@ -1,15 +1,4 @@
-"""
-channel-radar — FastAPI application.
 
-Routes:
-  GET  /                     → dashboard (channel list)
-  POST /api/channels         → add a channel
-  GET  /channel/<username>   → channel detail page
-  GET  /post/<username>/<id> → post detail page
-  GET  /api/channels/<u>/digest → AI digest
-  GET  /api/health           → health check
-  GET  /api/collect          → trigger manual collection (also used as external cron endpoint)
-"""
 
 from __future__ import annotations
 
@@ -44,22 +33,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-# ── Lifespan ──────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ensured")
     start_scheduler()
     yield
-    # Shutdown
+
     stop_scheduler()
-
-
-# ── App ───────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="channel-radar",
@@ -74,9 +57,6 @@ _BASE_DIR = pathlib.Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=_BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_BASE_DIR / "templates")
 
-
-# ── Template filters ──────────────────────────────────────────────────
-
 def _format_number(value):
     """Format large numbers: 1234567 → '1.2M'."""
     if value is None:
@@ -88,7 +68,6 @@ def _format_number(value):
     if value >= 1_000:
         return f"{value / 1_000:.1f}K"
     return str(value)
-
 
 def _time_ago(value):
     """Format datetime as 'X ago'."""
@@ -110,12 +89,8 @@ def _time_ago(value):
     minutes = diff.seconds // 60
     return f"{minutes}m ago"
 
-
 templates.env.filters["format_number"] = _format_number
 templates.env.filters["time_ago"] = _time_ago
-
-
-# ── Pages ─────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, session: AsyncSession = Depends(get_session)):
@@ -125,7 +100,6 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
     )
     channels = result.scalars().all()
 
-    # Enrich with post counts
     channel_stats = []
     for ch in channels:
         count_result = await session.execute(
@@ -144,7 +118,6 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
         "ai_available": ai_service.is_ai_available(),
     })
 
-
 @app.get("/channel/{username}", response_class=HTMLResponse)
 async def channel_page(
     request: Request,
@@ -157,7 +130,6 @@ async def channel_page(
     if channel is None:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    # ── Period filter ─────────────────────────────────────────
     now = dt.datetime.now(dt.timezone.utc)
     period_map = {
         "1d": now - dt.timedelta(days=1),
@@ -167,7 +139,6 @@ async def channel_page(
     }
     since = period_map[period]
 
-    # ── Posts ──────────────────────────────────────────────────
     result = await session.execute(
         select(Post)
         .where(Post.channel_username == username.lower())
@@ -176,7 +147,6 @@ async def channel_page(
     )
     posts = result.scalars().all()
 
-    # ── Anomalies ─────────────────────────────────────────────
     posts_data = [
         {"message_id": p.message_id, "views": p.views or 0, "text": p.text}
         for p in posts
@@ -184,7 +154,6 @@ async def channel_page(
     anomalies = await ai_service.detect_anomalies(username, posts_data)
     anomaly_ids = {a["message_id"] for a in anomalies}
 
-    # ── Subscriber history (for chart) ────────────────────────
     metrics_result = await session.execute(
         select(ChannelMetricsSnapshot)
         .where(ChannelMetricsSnapshot.channel_username == username.lower())
@@ -198,7 +167,6 @@ async def channel_page(
         for m in metrics_result.scalars().all()
     ]
 
-    # ── Views trend (aggregate by date) ───────────────────────
     views_by_date: dict[str, int] = {}
     for p in posts:
         if p.date:
@@ -210,7 +178,6 @@ async def channel_page(
         for k, v in sorted(views_by_date.items())
     ]
 
-    # ── AI digest (cached) ────────────────────────────────────
     digest = None
     digest_result = await session.execute(
         select(AIAnalysis)
@@ -238,7 +205,6 @@ async def channel_page(
         "ai_available": ai_service.is_ai_available(),
     })
 
-
 @app.get("/post/{username}/{message_id}", response_class=HTMLResponse)
 async def post_page(
     request: Request,
@@ -259,7 +225,6 @@ async def post_page(
 
     channel = await session.get(Channel, username.lower())
 
-    # Metrics history for this post
     metrics_result = await session.execute(
         select(PostMetricsSnapshot)
         .where(PostMetricsSnapshot.post_id == post.id)
@@ -279,9 +244,6 @@ async def post_page(
         "channel": channel,
         "metrics_history": metrics_history,
     })
-
-
-# ── API ───────────────────────────────────────────────────────────────
 
 @app.post("/api/channels")
 async def api_add_channel(
@@ -318,7 +280,6 @@ async def api_add_channel(
             status_code=500,
         )
 
-
 @app.get("/api/channels/{username}/digest")
 async def api_channel_digest(
     username: str,
@@ -329,7 +290,6 @@ async def api_channel_digest(
     if channel is None:
         raise HTTPException(status_code=404)
 
-    # Get recent posts
     result = await session.execute(
         select(Post)
         .where(Post.channel_username == username.lower())
@@ -352,7 +312,6 @@ async def api_channel_digest(
     if digest is None:
         return JSONResponse({"digest": None, "error": "AI is unavailable or rate-limited"})
 
-    # Cache the digest
     analysis = AIAnalysis(
         channel_username=username.lower(),
         analysis_type="digest",
@@ -366,12 +325,10 @@ async def api_channel_digest(
 
     return JSONResponse({"digest": digest})
 
-
 @app.get("/api/health")
 async def health():
     """Health check — used by Render / monitoring."""
     return {"status": "ok", "ai_available": ai_service.is_ai_available()}
-
 
 @app.get("/api/collect")
 async def api_trigger_collect(session: AsyncSession = Depends(get_session)):
