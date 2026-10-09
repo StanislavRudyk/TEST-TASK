@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Post #{{ post.message_id }} — {{ channel.title or channel.username }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / <a href="/channel/{{ channel.username }}">{{ channel.title or channel.username }}</a> / Post #{{ post.message_id }}
+</div>
+
+<div style="margin-top: 20px;">
+    <div class="post-detail">
+        <div class="post-detail__text">{{ post.text or '(no text — media only)' }}</div>
+
+        {% if post.reactions %}
+        <div class="reactions-list">
+            {% for emoji, count in post.reactions.items() %}
+            <div class="reaction-badge">
+                {{ emoji }} <span class="reaction-badge__count">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="post-detail__meta">
+            <span>📅 {{ post.date.strftime('%Y-%m-%d %H:%M') if post.date else 'unknown' }}</span>
+            <span>👁 {{ post.views | format_number }} views</span>
+            {% if post.media_type %}<span>📎 {{ post.media_type }}</span>{% endif %}
+            {% if post.ai_category %}<span class="post-row__category">{{ post.ai_category }}</span>{% endif %}
+            {% if post.is_anomaly %}<span style="color:var(--yellow);">⚡ Anomaly</span>{% endif %}
+            <span><a href="{{ post.url }}" target="_blank" rel="noopener">View on Telegram ↗</a></span>
+        </div>
+    </div>
+
+    {% if metrics_history %}
+    <div class="chart-section">
+        <div class="chart-section__title">📊 Views Over Time</div>
+        <div class="chart-container">
+            <canvas id="post-metrics-chart" data-metrics='{{ metrics_history | tojson }}'></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

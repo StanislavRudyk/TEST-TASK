@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: channel-radar
+    runtime: docker
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: channel-radar-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: COLLECT_INTERVAL_MINUTES
+        value: "30"
+      - key: APP_ENV
+        value: "production"
+    healthCheckPath: /api/health
+
+databases:
+  - name: channel-radar-db
+    plan: free
+    databaseName: channel_radar

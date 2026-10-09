@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ channel.title or channel.username }} — channel-radar{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">← Back to Dashboard</a>
+
+<div class="page-header">
+    <div class="page-header__top">
+        <div class="page-header__avatar">
+            {% if channel.avatar_url %}
+                <img src="{{ channel.avatar_url }}" alt="{{ channel.title }}">
+            {% else %}
+                {{ channel.title[0].upper() if channel.title else channel.username[0].upper() }}
+            {% endif %}
+        </div>
+        <div>
+            <h1>{{ channel.title or channel.username }}</h1>
+            <div class="page-header__username">@{{ channel.username }}</div>
+        </div>
+    </div>
+    <div class="page-header__meta">
+        <span>{{ channel.subscriber_count | format_number }} subscribers</span>
+        <span>Last sync: {{ channel.last_collected_at | time_ago }}</span>
+        <span class="badge badge--{{ channel.status }}">{{ channel.status }}</span>
+    </div>
+    {% if channel.description %}
+    <p style="margin-top:10px;color:var(--text-secondary);font-size:0.88rem;">{{ channel.description[:300] }}</p>
+    {% endif %}
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-card__value">{{ channel.subscriber_count | format_number }}</div>
+        <div class="stat-card__label">Subscribers</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">{{ posts | length }}</div>
+        <div class="stat-card__label">Posts ({{ period }})</div>
+    </div>
+    <div class="stat-card">
+        {% set total_views = posts | map(attribute='views') | select('integer') | sum %}
+        <div class="stat-card__value">{{ total_views | format_number }}</div>
+        <div class="stat-card__label">Total Views</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">{{ anomalies | length }}</div>
+        <div class="stat-card__label">Anomalies</div>
+    </div>
+</div>
+
+<!-- Period Filter -->
+<div class="period-filter">
+    <a href="?period=1d" class="period-btn {% if period == '1d' %}active{% endif %}">24h</a>
+    <a href="?period=7d" class="period-btn {% if period == '7d' %}active{% endif %}">7 days</a>
+    <a href="?period=30d" class="period-btn {% if period == '30d' %}active{% endif %}">30 days</a>
+    <a href="?period=all" class="period-btn {% if period == 'all' %}active{% endif %}">All</a>
+</div>
+
+<!-- Charts -->
+{% if views_trend %}
+<div class="chart-section">
+    <div class="chart-section__title">📊 Views per Day</div>
+    <div class="chart-container">
+        <canvas id="views-chart" data-views='{{ views_trend | tojson }}'></canvas>
+    </div>
+</div>
+{% endif %}
+
+{% if subscriber_history %}
+<div class="chart-section">
+    <div class="chart-section__title">📈 Subscribers</div>
+    <div class="chart-container">
+        <canvas id="subscribers-chart" data-subscribers='{{ subscriber_history | tojson }}'></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- AI Digest -->
+<div class="digest-section">
+    <div class="digest-section__title">
+        🤖 AI Digest
+        {% if ai_available %}
+        <button id="generate-digest-btn" class="btn btn--sm btn--secondary" data-channel="{{ channel.username }}">
+            🔄 Generate Digest
+        </button>
+        {% endif %}
+    </div>
+    <div id="digest-content" class="{% if digest %}digest-section__content{% else %}digest-section__placeholder{% endif %}">
+        {% if digest %}
+            {{ digest }}
+        {% elif ai_available %}
+            Click "Generate Digest" to create an AI summary of this channel's recent activity.
+        {% else %}
+            AI features are currently unavailable (API key not configured or service down).
+        {% endif %}
+    </div>
+</div>
+
+<!-- Anomalies -->
+{% if anomalies %}
+<div class="digest-section" style="border-color: var(--yellow); border-left-width: 3px;">
+    <div class="digest-section__title">⚡ Anomalies Detected</div>
+    <div class="digest-section__content">
+        {% for a in anomalies %}
+        <div style="margin-bottom: 8px;">• Post #{{ a.message_id }}: {{ a.reason }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Posts -->
+<div class="posts-section">
+    <div class="posts-section__title">Posts ({{ posts | length }})</div>
+
+    {% if posts %}
+    <div class="post-list">
+        {% for post in posts %}
+        <a href="/post/{{ channel.username }}/{{ post.message_id }}" class="post-row {% if post.message_id in anomaly_ids %}post-row--anomaly{% endif %}">
+            <div>
+                <div class="post-row__text">{{ post.text[:120] if post.text else '(media only)' }}</div>
+                <div class="post-row__meta">
+                    {{ post.date | time_ago if post.date else '' }}
+                    {% if post.media_type %} · 📎 {{ post.media_type }}{% endif %}
+                    {% if post.ai_category %}
+                        <span class="post-row__category">{{ post.ai_category }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="post-row__views">👁 {{ post.views | format_number }}</div>
+            <div class="post-row__meta">
+                {% if post.reactions %}
+                    {% for emoji, count in post.reactions.items() %}
+                        {{ emoji }} {{ count }}
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state__text">No posts in this period</div>
+        <div class="empty-state__hint">Try selecting a longer time range</div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

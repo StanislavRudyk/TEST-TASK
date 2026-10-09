@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}channel-radar — Dashboard{% endblock %}
+
+{% block content %}
+<form id="add-channel-form" class="add-channel">
+    <input
+        type="text"
+        id="channel-input"
+        class="add-channel__input"
+        placeholder="Enter channel username, e.g. @durov"
+        autocomplete="off"
+        required
+    >
+    <button type="submit" id="add-channel-btn" class="btn">Add Channel</button>
+</form>
+
+{% if channels %}
+<div class="channel-grid">
+    {% for item in channels %}
+    {% set ch = item.channel %}
+    <a href="/channel/{{ ch.username }}" class="channel-card">
+        <div class="channel-card__avatar">
+            {% if ch.avatar_url %}
+                <img src="{{ ch.avatar_url }}" alt="{{ ch.title }}">
+            {% else %}
+                {{ ch.title[0].upper() if ch.title else ch.username[0].upper() }}
+            {% endif %}
+        </div>
+        <div class="channel-card__info">
+            <div class="channel-card__name">{{ ch.title or ch.username }}</div>
+            <div class="channel-card__desc">@{{ ch.username }}{% if ch.description %} · {{ ch.description[:80] }}{% endif %}</div>
+            {% if ch.error_message %}
+                <div style="font-size:0.75rem;color:var(--red);margin-top:4px;">{{ ch.error_message }}</div>
+            {% endif %}
+        </div>
+        <div class="channel-card__stats">
+            <div class="stat">
+                <div class="stat__value">{{ ch.subscriber_count | format_number }}</div>
+                <div class="stat__label">Subscribers</div>
+            </div>
+            <div class="stat">
+                <div class="stat__value">{{ item.post_count }}</div>
+                <div class="stat__label">Posts</div>
+            </div>
+            <div class="stat">
+                <div class="stat__value">{{ ch.last_collected_at | time_ago }}</div>
+                <div class="stat__label">Last Sync</div>
+            </div>
+        </div>
+        <div class="channel-card__status">
+            <span class="badge badge--{{ ch.status }}">{{ ch.status }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state__icon">📡</div>
+    <div class="empty-state__text">No channels tracked yet</div>
+    <div class="empty-state__hint">Add a Telegram channel above to start collecting analytics</div>
+</div>
+{% endif %}
+{% endblock %}
